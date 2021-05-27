@@ -122,27 +122,27 @@
       return {
         tokens: [
           {
-            tokenName: 'Rabbit', // 通证简称
+            tokenName: 'XCAD', // 通证简称
             tokenDecimals: '18',
-            tokenContract: '0x95a1199EBA84ac5f19546519e287d43D2F0E1b41', // 通证合约，必传
+            tokenContract: '0x431e0cD023a32532BF3969CddFc002c00E98429d', // 通证合约，必传
             key: 'e286926df948477882476b7e9867bbb5', // 微信推送key
             // lpTokenContract: '', // 流动性交易对合约
             // lpTokenDecimals: '',
             // lpTokenName: '',
             chain: 'bsc',
-            swap: 'mdex', // 交易所
+            swap: 'pancakeSwap', // 交易所
             slippage: 0.05, // 滑点
             minLPReserve: 10000, // 池子最小通证量
             purchaseAmountInDetail: {
               HUSD: 0.1,
-              BUSD: 300,
+              BUSD: 0.1,
               USDT: 0.1,
               HT: 0.01,
               BNB: 0.56
             },
-            tokenPriceLimit: 1, // 单价上限
+            tokenPriceLimit: 3, // 单价上限
             purchaseNum: 1, // 当前购买次数
-            purchaseLimit: 2, // 购买总次数
+            purchaseLimit: 1, // 购买总次数
             autoPurchase: false, // 是否自动购买
             mode: 'prune' // 购买模式，可选：standard、prune
           }
@@ -229,14 +229,14 @@
         // 2、开启自动购买
         _this.autoPurchaseOpen(token)
         // 3、初始化lpPair合约
-        token.pairContract = await _this.initLPPairContract(token)
+        token.pairContract = await _this.getPairLoopAndInit(token)
         // 4、初始化通证基础信息
-        await _this.initTokenInfo(token)
+        await _this.decisionToken(token)
         // 6、开启订阅购买
         _this.subscribeTokenTransfer(token)
       },
       // 初始化lpPair合约
-      initLPPairContract: async function (token) {
+      getPairLoopAndInit: async function (token) {
         const _this = this
         // 指定了LP Token合约，则通过该合约获取LP Pair合约
         if (token.lpTokenContract !== null && token.lpTokenContract !== undefined) {
@@ -245,17 +245,17 @@
             decimal: token.lpTokenDecimals,
             tokenName: token.lpTokenName
           }
-          const pairContract = await _this.getPairCore(token, sToken)
+          const pairContract = await _this.getPairAndInit(token, sToken)
           if (pairContract !== null) {
             return pairContract
           } else {
             console.log('[BigBang] Attempt to obtain the LP Pair contract failed, try again...')
-            return _this.initLPPairContract(token)
+            return _this.getPairLoopAndInit(token)
           }
         }
         // 通过其它token（ht、usdt、bnb）尝试获取LP Pair合约
         const pairContractPromises = _this.swapConfig[token.chain].sTokens.map(async sToken => {
-          return await _this.getPairCore(token, sToken)
+          return await _this.getPairAndInit(token, sToken)
         })
         for (const pairContractPromise of pairContractPromises) {
           const pairContract = await pairContractPromise
@@ -265,9 +265,9 @@
         }
 
         console.log('[BigBang] Attempt to obtain the LP Pair contract failed, try again...')
-        return _this.initLPPairContract(token)
+        return _this.getPairLoopAndInit(token)
       },
-      getPairCore: async function (token, sToken) {
+      getPairAndInit: async function (token, sToken) {
         const _this = this
         if (sToken !== null && sToken !== undefined) {
           const [pairContract] = await Promise.all([
@@ -435,7 +435,7 @@
           token.lpReserveBReadable = new BigNumber(result._reserve1).div(new BigNumber(10 ** token.tokenDecimals)).toFixed(2)
         }
       },
-      initTokenInfo: async function (token) {
+      decisionToken: async function (token) {
         // 1、根据交易对，获取交易对的通证合约地址
         const [token0Contract, token1Contract] = await Promise.all([
           getToken0(token.chain, token.swap, token.pairContract),
@@ -458,7 +458,7 @@
         const _this = this
         _this.tokens.forEach(async function (token) {
           // 初始化lpPair合约
-          token.pairContract = await _this.initLPPairContract(token)
+          token.pairContract = await _this.getPairLoopAndInit(token)
           if (token.pairContract === null || token.pairContract === _this.destoryAddress) {
             const subscribeTransferDialog = document.getElementById('lp-token-pair-init-fail-dialog')
             // Now dialog always acts like a native <dialog>.
@@ -467,7 +467,7 @@
           }
           // 初始化通证基础信息
           if (token.hasInit === undefined || token.hasInit === null || !token.hasInit) {
-            await _this.initTokenInfo(token)
+            await _this.decisionToken(token)
           }
           _this.subscribeTokenTransfer(token)
         })
